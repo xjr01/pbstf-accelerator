@@ -17,7 +17,8 @@ particle_radius = ti.field(dtype=float, shape=())
 kernel_radius = ti.field(dtype=float, shape=())
 
 density_eps = 200.
-distance_eps = 40.
+distance_eps = 60.
+surface_eps = 10.
 
 Nmax, Cmax = 10000, 50000
 Nangle = 360
@@ -256,6 +257,28 @@ def apply_distance_constraints(epsilon: float) -> float:
 	return constraint_sos
 
 @ti.kernel
+def apply_surface_constraints(epsilon: float) -> float:
+	constraint_sos = 0.
+	for i in range(N[None]):
+		if on_surface[i] == 0:
+			continue
+		p = positions[i]
+		pi0 = positions[local_mesh_neighbors[i, 0]] - p
+		pi1 = positions[local_mesh_neighbors[i, 1]] - p
+		pi0_len = tm.length(pi0)
+		pi1_len = tm.length(pi1)
+		c = pi0_len + pi1_len
+		constraint_sos += c ** 2
+		grad_0 = pi0 / pi0_len
+		grad_1 = pi1 / pi1_len
+		grad_i = -grad_0 - grad_1
+		lmd = -c / (epsilon + 2. + tm.length(grad_i) ** 2)
+		delta_positions[i] += lmd * grad_i
+		delta_positions[local_mesh_neighbors[i, 0]] += lmd * grad_0
+		delta_positions[local_mesh_neighbors[i, 1]] += lmd * grad_1
+	return constraint_sos
+
+@ti.kernel
 def update_positions():
 	for i in range(N[None]):
 		positions[i] += delta_positions[i]
@@ -316,24 +339,28 @@ if __name__ == '__main__':
 	get_densities()
 	mass[None] /= densities.to_numpy().max()
 	
-	# st_time = time.time()
-	# os.makedirs('output', exist_ok=True)
-	# for iter in range(40):
-	# 	get_densities()
-	# 	get_surface_normal()
-	# 	constraints = densities.to_numpy()[:N[None]] / rest_density - 1.
-	# 	apply_density_constraints(density_eps)
-	# 	distance_constriant = apply_distance_constraints(distance_eps)
-	# 	print(f'constraint: {(constraints ** 2).sum() + distance_constriant}, time: {time.time() - st_time}')
-	# 	st_time = time.time()
-	# 	update_positions()
-	# 	init_neighbor_searcher()
+	os.makedirs('output', exist_ok=True)
+	
+	st_time = time.time()
+	for iter in range(40):
+		get_densities()
+		get_surface_normal()
+		get_local_mesh()
+		constraints = densities.to_numpy()[:N[None]] / rest_density - 1.
+		apply_density_constraints(density_eps)
+		distance_constriant = apply_distance_constraints(distance_eps)
+		surface_constraint = apply_surface_constraints(surface_eps)
+		print(f'constraint: {(constraints ** 2).sum() + distance_constriant + surface_constraint}, time: {time.time() - st_time}')
+		st_time = time.time()
+		update_positions()
+		init_neighbor_searcher()
 	get_densities()
 	get_surface_normal()
 	get_local_mesh()
-	# constraints = densities.to_numpy()[:N[None]] / rest_density - 1.
-	# distance_constriant = apply_distance_constraints(distance_eps)
-	# print(f'constraint: {(constraints ** 2).sum() + distance_constriant}, time: {time.time() - st_time}')
+	constraints = densities.to_numpy()[:N[None]] / rest_density - 1.
+	distance_constriant = apply_distance_constraints(distance_eps)
+	surface_constraint = apply_surface_constraints(surface_eps)
+	print(f'constraint: {(constraints ** 2).sum() + distance_constriant + surface_constraint}, time: {time.time() - st_time}')
 	
 	vis_p = np.zeros((N[None], 2))
 	get_np_positions(vis_p)
