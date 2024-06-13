@@ -15,6 +15,7 @@ x_min, x_max = -5., 5.
 y_min, y_max = -5., 5.
 particle_radius = ti.field(dtype=float, shape=())
 kernel_radius = ti.field(dtype=float, shape=())
+dt = 1. / 30.
 
 density_eps = 200.
 distance_eps = 60.
@@ -282,7 +283,13 @@ def apply_surface_constraints(epsilon: float) -> float:
 def update_positions():
 	for i in range(N[None]):
 		positions[i] += delta_positions[i]
+		velocities[i] += delta_positions[i] / dt
 	delta_positions.fill(0)
+
+@ti.kernel
+def advance():
+	for i in range(N[None]):
+		positions[i] += velocities[i] * dt
 
 
 ############## Visualizations ##############
@@ -341,31 +348,43 @@ if __name__ == '__main__':
 	
 	os.makedirs('output', exist_ok=True)
 	
-	st_time = time.time()
-	for iter in range(40):
+	get_densities()
+	get_surface_normal()
+	get_local_mesh()
+	vis_p = np.zeros((N[None], 2))
+	normal_p = np.zeros((N[None], 2))
+	on_surf = np.zeros(N[None], dtype=np.int8)
+	local_mesh = np.zeros((N[None], 2), dtype=np.int32)
+	get_np_positions(vis_p)
+	get_np_surface_data(normal_p, on_surf, local_mesh)
+	show_particles(vis_p, n=normal_p, on_surf=on_surf, local_mesh=local_mesh, save_file=f'output/particles_0.png')
+	print(f'Frame 0 written.')
+	for frame in range(100):
+		advance()
+		init_neighbor_searcher()
+		
+		st_time = time.time()
+		for iter in range(40):
+			get_densities()
+			get_surface_normal()
+			get_local_mesh()
+			constraints = densities.to_numpy()[:N[None]] / rest_density - 1.
+			apply_density_constraints(density_eps)
+			distance_constriant = apply_distance_constraints(distance_eps)
+			surface_constraint = apply_surface_constraints(surface_eps)
+			# print(f'constraint: {(constraints ** 2).sum() + distance_constriant + surface_constraint}, time: {time.time() - st_time}')
+			st_time = time.time()
+			update_positions()
+			init_neighbor_searcher()
 		get_densities()
 		get_surface_normal()
 		get_local_mesh()
 		constraints = densities.to_numpy()[:N[None]] / rest_density - 1.
-		apply_density_constraints(density_eps)
 		distance_constriant = apply_distance_constraints(distance_eps)
 		surface_constraint = apply_surface_constraints(surface_eps)
-		print(f'constraint: {(constraints ** 2).sum() + distance_constriant + surface_constraint}, time: {time.time() - st_time}')
-		st_time = time.time()
-		update_positions()
-		init_neighbor_searcher()
-	get_densities()
-	get_surface_normal()
-	get_local_mesh()
-	constraints = densities.to_numpy()[:N[None]] / rest_density - 1.
-	distance_constriant = apply_distance_constraints(distance_eps)
-	surface_constraint = apply_surface_constraints(surface_eps)
-	print(f'constraint: {(constraints ** 2).sum() + distance_constriant + surface_constraint}, time: {time.time() - st_time}')
-	
-	vis_p = np.zeros((N[None], 2))
-	get_np_positions(vis_p)
-	normal_p = np.zeros((N[None], 2))
-	on_surf = np.zeros(N[None], dtype=np.int8)
-	local_mesh = np.zeros((N[None], 2), dtype=np.int32)
-	get_np_surface_data(normal_p, on_surf, local_mesh)
-	show_particles(vis_p, n=normal_p, on_surf=on_surf, local_mesh=local_mesh, save_file=f'output/particles.png')
+		# print(f'constraint: {(constraints ** 2).sum() + distance_constriant + surface_constraint}, time: {time.time() - st_time}')
+		
+		get_np_positions(vis_p)
+		get_np_surface_data(normal_p, on_surf, local_mesh)
+		show_particles(vis_p, n=normal_p, on_surf=on_surf, local_mesh=local_mesh, save_file=f'output/particles_{frame + 1}.png')
+		print(f'Frame {frame + 1} written.')
