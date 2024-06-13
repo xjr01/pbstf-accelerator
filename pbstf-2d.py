@@ -196,15 +196,21 @@ if __name__ == '__main__':
 	mass[None] /= densities.to_numpy().max()
 	
 	os.makedirs('output', exist_ok=True)
+	vis_p = np.zeros((N[None], 2))
+	get_np_positions(vis_p)
+	show_particles(vis_p, f'output/particles_0.png')
+	print(f'Iteration 0 saved.')
 	for iter in range(40):
-		init_neighbor_searcher()
 		get_densities()
-		constraints = densities.to_numpy() / rest_density - 1.
-		print((constraints ** 2).sum())
-		apply_density_constraints(10.)
+		constraints = densities.to_numpy()[:N[None]] / rest_density - 1.
+		print((constraints ** 2).mean(), constraints.max(), constraints.min(), densities.to_numpy()[:N[None]].min())
+		apply_density_constraints(40.)
 		update_positions()
+		init_neighbor_searcher()
 		
-		vis_p = np.zeros((N[None], 2))
 		get_np_positions(vis_p)
-		show_particles(vis_p, f'output/particles_{iter}.png')
-		print(f'Frame {iter} saved.')
+		show_particles(vis_p, f'output/particles_{iter + 1}.png')
+		print(f'Iteration {iter + 1} saved.')
+	get_densities()
+	constraints = densities.to_numpy()[:N[None]] / rest_density - 1.
+	print((constraints ** 2).mean(), constraints.max(), constraints.min(), densities.to_numpy()[:N[None]].min())
