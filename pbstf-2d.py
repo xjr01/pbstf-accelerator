@@ -3,6 +3,7 @@ import taichi.math as tm
 import numpy as np
 import matplotlib.pyplot as plt
 import os
+import time
 
 ti.init(arch=ti.cuda)
 
@@ -13,6 +14,9 @@ x_min, x_max = -5., 5.
 y_min, y_max = -5., 5.
 particle_radius = ti.field(dtype=float, shape=())
 kernel_radius = ti.field(dtype=float, shape=())
+
+density_eps = 200.
+distance_eps = 40.
 
 Nmax, Cmax = 10000, 50000
 positions = ti.field(dtype=tm.vec2, shape=Nmax)
@@ -160,6 +164,29 @@ def apply_density_constraints(epsilon: float):
 		delta_positions[i] += lmd * grad_i
 
 @ti.kernel
+def apply_distance_constraints(epsilon: float) -> float:
+	constraint_sos = 0.
+	for i in range(N[None]):
+		p = positions[i]
+		idx, idy = int((p[0] - x_min) // kernel_radius[None]), int((p[1] - y_min) // kernel_radius[None])
+		for gi in range(max(0, idx - 1), min(grid_size[0] - 1, idx + 1) + 1):
+			for gj in range(max(0, idy - 1), min(grid_size[1] - 1, idy + 1) + 1):
+				for j_id in range(grid_cnt[gi, gj]):
+					j = sorted_id[grid_offset[gi, gj] + j_id]
+					pj = positions[j]
+					pij = pj - p
+					pij_len = tm.length(pij)
+					if pij_len < particle_radius[None] * 2. and i < j:
+						c = pij_len - particle_radius[None] * 2.
+						constraint_sos += c ** 2
+						grad_j = pij / pij_len
+						grad_i = -grad_j
+						lmd = -c / (epsilon + 2.)
+						delta_positions[i] += lmd * grad_i
+						delta_positions[j] += lmd * grad_j
+	return constraint_sos
+
+@ti.kernel
 def update_positions():
 	for i in range(N[None]):
 		positions[i] += delta_positions[i]
@@ -194,7 +221,9 @@ if __name__ == '__main__':
 	mass[None] = 1.
 	get_densities()
 	mass[None] /= densities.to_numpy().max()
+	print('particle number:', N[None])
 	
+	st_time = time.time()
 	os.makedirs('output', exist_ok=True)
 	vis_p = np.zeros((N[None], 2))
 	get_np_positions(vis_p)
@@ -203,14 +232,16 @@ if __name__ == '__main__':
 	for iter in range(40):
 		get_densities()
 		constraints = densities.to_numpy()[:N[None]] / rest_density - 1.
-		print((constraints ** 2).mean(), constraints.max(), constraints.min(), densities.to_numpy()[:N[None]].min())
-		apply_density_constraints(40.)
+		apply_density_constraints(density_eps)
+		distance_constriant = apply_distance_constraints(distance_eps)
+		print(f'constraint: {(constraints ** 2).sum() + distance_constriant}, time: {time.time() - st_time}')
+		st_time = time.time()
 		update_positions()
 		init_neighbor_searcher()
-		
-		get_np_positions(vis_p)
-		show_particles(vis_p, f'output/particles_{iter + 1}.png')
-		print(f'Iteration {iter + 1} saved.')
 	get_densities()
 	constraints = densities.to_numpy()[:N[None]] / rest_density - 1.
-	print((constraints ** 2).mean(), constraints.max(), constraints.min(), densities.to_numpy()[:N[None]].min())
+	distance_constriant = apply_distance_constraints(distance_eps)
+	print(f'constraint: {(constraints ** 2).sum() + distance_constriant}, time: {time.time() - st_time}')
+	
+	get_np_positions(vis_p)
+	show_particles(vis_p, f'output/particles.png')
