@@ -359,12 +359,14 @@ if __name__ == '__main__':
 	get_np_surface_data(normal_p, on_surf, local_mesh)
 	show_particles(vis_p, n=normal_p, on_surf=on_surf, local_mesh=local_mesh, save_file=f'output/particles_0.png')
 	print(f'Frame 0 written.')
-	for frame in range(100):
+	max_iter = 10000
+	constraint_sos = np.zeros(max_iter + 1)
+	for frame in range(1):
 		advance()
 		init_neighbor_searcher()
 		
 		st_time = time.time()
-		for iter in range(40):
+		for iter in range(max_iter):
 			get_densities()
 			get_surface_normal()
 			get_local_mesh()
@@ -372,8 +374,10 @@ if __name__ == '__main__':
 			apply_density_constraints(density_eps)
 			distance_constriant = apply_distance_constraints(distance_eps)
 			surface_constraint = apply_surface_constraints(surface_eps)
-			# print(f'constraint: {(constraints ** 2).sum() + distance_constriant + surface_constraint}, time: {time.time() - st_time}')
-			st_time = time.time()
+			constraint_sos[iter] = (constraints ** 2).sum() + distance_constriant + surface_constraint
+			if iter % 1000 == 0:
+				print(f'Iteration {iter}: {constraint_sos[iter]}, time: {time.time() - st_time}')
+				st_time = time.time()
 			update_positions()
 			init_neighbor_searcher()
 		get_densities()
@@ -382,9 +386,14 @@ if __name__ == '__main__':
 		constraints = densities.to_numpy()[:N[None]] / rest_density - 1.
 		distance_constriant = apply_distance_constraints(distance_eps)
 		surface_constraint = apply_surface_constraints(surface_eps)
-		# print(f'constraint: {(constraints ** 2).sum() + distance_constriant + surface_constraint}, time: {time.time() - st_time}')
+		constraint_sos[max_iter] = (constraints ** 2).sum() + distance_constriant + surface_constraint
+		print(f'Iteration {max_iter}: {constraint_sos[max_iter]}, time: {time.time() - st_time}')
 		
 		get_np_positions(vis_p)
 		get_np_surface_data(normal_p, on_surf, local_mesh)
 		show_particles(vis_p, n=normal_p, on_surf=on_surf, local_mesh=local_mesh, save_file=f'output/particles_{frame + 1}.png')
+		plt.plot(np.linspace(0, max_iter, max_iter + 1), constraint_sos)
+		plt.xlabel('iteration')
+		plt.ylabel('constraint')
+		plt.savefig(f'output/plot_{frame + 1}.png')
 		print(f'Frame {frame + 1} written.')
