@@ -48,16 +48,15 @@ def init_square_droplet(sq_xmin: float, sq_xmax: float, sq_ymin: float, sq_ymax:
 	spacing = (sq_xmax - sq_xmin) / x_resolution
 	particle_radius[None] = .5 * spacing
 	kernel_radius[None] = 3. * spacing
-	y, y_odd = sq_ymin, False
+	y = sq_ymin
 	while y <= sq_ymax:
-		x = sq_xmin + y_odd * spacing * .5
+		x = sq_xmin
 		while x <= sq_xmax:
 			positions[N[None]] = tm.vec2(x, y)
 			velocities[N[None]] = tm.vec2(0, 0)
 			N[None] += 1
 			x += spacing
-		y += spacing * tm.sqrt(3.) * .5
-		y_odd = not y_odd
+		y += spacing
 
 @ti.kernel
 def init_neighbor_searcher():
