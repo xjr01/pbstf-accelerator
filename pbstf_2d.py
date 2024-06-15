@@ -264,19 +264,21 @@ def apply_surface_constraints(epsilon: float) -> float:
 		if on_surface[i] == 0:
 			continue
 		p = positions[i]
-		pi0 = positions[local_mesh_neighbors[i, 0]] - p
-		pi1 = positions[local_mesh_neighbors[i, 1]] - p
+		pi0 = positions[local_mesh_neighbors[i, 0]] - p if local_mesh_neighbors[i, 0] >= 0 else tm.vec2(0, 0)
+		pi1 = positions[local_mesh_neighbors[i, 1]] - p if local_mesh_neighbors[i, 1] >= 0 else tm.vec2(0, 0)
 		pi0_len = tm.length(pi0)
 		pi1_len = tm.length(pi1)
 		c = pi0_len + pi1_len
 		constraint_sos += c ** 2
-		grad_0 = pi0 / pi0_len
-		grad_1 = pi1 / pi1_len
+		grad_0 = pi0 / pi0_len if local_mesh_neighbors[i, 0] >= 0 else tm.vec2(0, 0)
+		grad_1 = pi1 / pi1_len if local_mesh_neighbors[i, 1] >= 0 else tm.vec2(0, 0)
 		grad_i = -grad_0 - grad_1
-		lmd = -c / (epsilon + 2. + tm.length(grad_i) ** 2)
+		lmd = -c / (epsilon + float(local_mesh_neighbors[i, 0] >= 0) + float(local_mesh_neighbors[i, 1] >= 0) + tm.length(grad_i) ** 2)
 		delta_positions[i] += lmd * grad_i
-		delta_positions[local_mesh_neighbors[i, 0]] += lmd * grad_0
-		delta_positions[local_mesh_neighbors[i, 1]] += lmd * grad_1
+		if local_mesh_neighbors[i, 0] >= 0:
+			delta_positions[local_mesh_neighbors[i, 0]] += lmd * grad_0
+		if local_mesh_neighbors[i, 1] >= 0:
+			delta_positions[local_mesh_neighbors[i, 1]] += lmd * grad_1
 	return constraint_sos
 
 @ti.kernel
