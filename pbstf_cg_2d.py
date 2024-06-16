@@ -13,7 +13,7 @@ from pbstf_2d import *
 
 density_weight = 1.
 distance_weight = 2.
-surface_weight = 1.
+surface_weight = .1
 
 
 @ti.kernel
@@ -60,22 +60,6 @@ def mat_mul_vec(x: ti.template(), Qx: ti.template()):
 						Qx[i] += grad_distance_i * grad_distance_x
 						Qx[j] += grad_distance_j * grad_distance_x
 		Qx[i] += grad_density_i * grad_density_x
-		# do the same thing for surface constraint
-		pi0 = positions[local_mesh_neighbors[i, 0]] - p if local_mesh_neighbors[i, 0] >= 0 else tm.vec2(0, 0)
-		pi1 = positions[local_mesh_neighbors[i, 1]] - p if local_mesh_neighbors[i, 1] >= 0 else tm.vec2(0, 0)
-		pi0_len = tm.length(pi0)
-		pi1_len = tm.length(pi1)
-		grad_surface_0 = surface_weight * pi0 / pi0_len if local_mesh_neighbors[i, 0] >= 0 else tm.vec2(0, 0)
-		grad_surface_1 = surface_weight * pi1 / pi1_len if local_mesh_neighbors[i, 1] >= 0 else tm.vec2(0, 0)
-		grad_surface_i = -grad_surface_0 - grad_surface_1
-		grad_surface_x = tm.dot(grad_surface_0, x[local_mesh_neighbors[i, 0]] if local_mesh_neighbors[i, 0] >= 0 else tm.vec2(0, 0))\
-			+ tm.dot(grad_surface_1, x[local_mesh_neighbors[i, 1]] if local_mesh_neighbors[i, 1] >= 0 else tm.vec2(0, 0))\
-			+ tm.dot(grad_surface_i, x[i])
-		if local_mesh_neighbors[i, 0] >= 0:
-			Qx[local_mesh_neighbors[i, 0]] += grad_surface_0 * grad_surface_x
-		if local_mesh_neighbors[i, 1] >= 0:
-			Qx[local_mesh_neighbors[i, 1]] += grad_surface_1 * grad_surface_x
-		Qx[i] += grad_surface_i * grad_surface_x
 
 @ti.kernel
 def get_RHS(b: ti.template()):
@@ -113,15 +97,14 @@ def get_RHS(b: ti.template()):
 		pi1 = positions[local_mesh_neighbors[i, 1]] - p if local_mesh_neighbors[i, 1] >= 0 else tm.vec2(0, 0)
 		pi0_len = tm.length(pi0)
 		pi1_len = tm.length(pi1)
-		surface_c = surface_weight * (pi0_len + pi1_len)
 		grad_surface_0 = surface_weight * pi0 / pi0_len if local_mesh_neighbors[i, 0] >= 0 else tm.vec2(0, 0)
 		grad_surface_1 = surface_weight * pi1 / pi1_len if local_mesh_neighbors[i, 1] >= 0 else tm.vec2(0, 0)
 		grad_surface_i = -grad_surface_0 - grad_surface_1
 		if local_mesh_neighbors[i, 0] >= 0:
-			b[local_mesh_neighbors[i, 0]] -= grad_surface_0 * surface_c
+			b[local_mesh_neighbors[i, 0]] -= grad_surface_0
 		if local_mesh_neighbors[i, 1] >= 0:
-			b[local_mesh_neighbors[i, 1]] -= grad_surface_1 * surface_c
-		b[i] -= grad_surface_i * surface_c
+			b[local_mesh_neighbors[i, 1]] -= grad_surface_1
+		b[i] -= grad_surface_i
 
 @ti.kernel
 def dot_prod(x: ti.template(), y: ti.template()) -> float:
@@ -233,7 +216,11 @@ if __name__ == '__main__':
 				show_particles(vis_p, n=normal_p, on_surf=on_surf, local_mesh=local_mesh, save_file=f'output/particles_iteration_{iter}.png')
 				acc_time, acc_iter = 0., 0
 			st_time = time.time()
-			acc_iter += conjugate_direction_solve()
+			cur_iter = conjugate_direction_solve()
+			if cur_iter == 0:
+				max_iter = iter
+				break
+			acc_iter += cur_iter
 			# print(f'max: {max_delta_position()}\t{particle_radius[None] * 2.}')
 			update_positions()
 			init_neighbor_searcher()
@@ -252,7 +239,7 @@ if __name__ == '__main__':
 		get_np_positions(vis_p)
 		get_np_surface_data(normal_p, on_surf, local_mesh)
 		show_particles(vis_p, n=normal_p, on_surf=on_surf, local_mesh=local_mesh, save_file=f'output/particles_{frame + 1}.png')
-		plt.plot(np.linspace(0, max_iter, max_iter + 1), constraint_sos)
+		plt.plot(np.linspace(0, max_iter, max_iter + 1), constraint_sos[:max_iter + 1])
 		plt.xlabel('iteration')
 		plt.ylabel('constraint')
 		plt.savefig(f'output/plot_{frame + 1}.png')
