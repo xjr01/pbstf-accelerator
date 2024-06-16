@@ -258,7 +258,7 @@ def apply_distance_constraints(epsilon: float) -> float:
 
 @ti.kernel
 def apply_surface_constraints(epsilon: float) -> float:
-	constraint_sos = 0.
+	constraint_sum = 0.
 	for i in range(N[None]):
 		if on_surface[i] == 0:
 			continue
@@ -268,7 +268,7 @@ def apply_surface_constraints(epsilon: float) -> float:
 		pi0_len = tm.length(pi0)
 		pi1_len = tm.length(pi1)
 		c = pi0_len + pi1_len
-		constraint_sos += c ** 2
+		constraint_sum += c
 		grad_0 = pi0 / pi0_len if local_mesh_neighbors[i, 0] >= 0 else tm.vec2(0, 0)
 		grad_1 = pi1 / pi1_len if local_mesh_neighbors[i, 1] >= 0 else tm.vec2(0, 0)
 		grad_i = -grad_0 - grad_1
@@ -278,7 +278,7 @@ def apply_surface_constraints(epsilon: float) -> float:
 			delta_positions[local_mesh_neighbors[i, 0]] += lmd * grad_0
 		if local_mesh_neighbors[i, 1] >= 0:
 			delta_positions[local_mesh_neighbors[i, 1]] += lmd * grad_1
-	return constraint_sos
+	return constraint_sum
 
 @ti.kernel
 def update_positions():

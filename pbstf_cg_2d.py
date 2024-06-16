@@ -214,7 +214,7 @@ if __name__ == '__main__':
 		advance()
 		init_neighbor_searcher()
 		
-		acc_time = 0.
+		acc_time, acc_iter = 0., 0
 		for iter in range(max_iter):
 			st_time = time.time()
 			get_densities()
@@ -227,13 +227,13 @@ if __name__ == '__main__':
 			surface_constraint = apply_surface_constraints(surface_eps)
 			constraint_sos[iter] = (constraints ** 2).sum() + distance_constriant + surface_constraint
 			if iter % 100 == 0:
-				print(f'Iteration {iter}: {constraint_sos[iter]}, time: {acc_time}')
+				print(f'Iteration {iter}: {constraint_sos[iter]} = {(constraints ** 2).sum()} + {distance_constriant} + {surface_constraint}, time: {acc_time}, iter: {acc_iter}')
 				get_np_positions(vis_p)
 				get_np_surface_data(normal_p, on_surf, local_mesh)
 				show_particles(vis_p, n=normal_p, on_surf=on_surf, local_mesh=local_mesh, save_file=f'output/particles_iteration_{iter}.png')
-				acc_time = 0.
+				acc_time, acc_iter = 0., 0
 			st_time = time.time()
-			conjugate_direction_solve()
+			acc_iter += conjugate_direction_solve()
 			# print(f'max: {max_delta_position()}\t{particle_radius[None] * 2.}')
 			update_positions()
 			init_neighbor_searcher()
@@ -247,7 +247,7 @@ if __name__ == '__main__':
 		distance_constriant = apply_distance_constraints(distance_eps)
 		surface_constraint = apply_surface_constraints(surface_eps)
 		constraint_sos[max_iter] = (constraints ** 2).sum() + distance_constriant + surface_constraint
-		print(f'Iteration {max_iter}: {constraint_sos[max_iter]}, time: {acc_time}')
+		print(f'Iteration {max_iter}: {constraint_sos[max_iter]} = {(constraints ** 2).sum()} + {distance_constriant} + {surface_constraint}, time: {acc_time}, iter: {acc_iter}')
 		
 		get_np_positions(vis_p)
 		get_np_surface_data(normal_p, on_surf, local_mesh)
