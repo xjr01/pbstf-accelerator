@@ -378,6 +378,9 @@ if __name__ == '__main__':
 			constraint_sos[iter] = (constraints ** 2).sum() + distance_constriant + surface_constraint
 			if iter % 1000 == 0:
 				print(f'Iteration {iter}: {constraint_sos[iter]}, time: {time.time() - st_time}')
+				get_np_positions(vis_p)
+				get_np_surface_data(normal_p, on_surf, local_mesh)
+				show_particles(vis_p, n=normal_p, on_surf=on_surf, local_mesh=local_mesh, save_file=f'output/particles_iteration_{iter}.png')
 				st_time = time.time()
 			update_positions()
 			init_neighbor_searcher()
@@ -397,4 +400,5 @@ if __name__ == '__main__':
 		plt.xlabel('iteration')
 		plt.ylabel('constraint')
 		plt.savefig(f'output/plot_{frame + 1}.png')
+		plt.clf()
 		print(f'Frame {frame + 1} written.')
