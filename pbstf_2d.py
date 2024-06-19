@@ -373,12 +373,14 @@ if __name__ == '__main__':
 			get_densities()
 			get_surface_normal()
 			get_local_mesh()
+			ti.sync()
 			acc_time += time.time() - st_time
 			constraints = densities.to_numpy()[:N[None]] / rest_density - 1.
 			st_time = time.time()
 			apply_density_constraints(density_eps)
 			distance_constriant = apply_distance_constraints(distance_eps)
 			surface_constraint = apply_surface_constraints(surface_eps)
+			ti.sync()
 			acc_time += time.time() - st_time
 			constraint_sos[iter] = (constraints ** 2).sum() + distance_constriant + surface_constraint
 			if iter % 1000 == 0:
@@ -391,11 +393,13 @@ if __name__ == '__main__':
 			st_time = time.time()
 			update_positions()
 			init_neighbor_searcher()
+			ti.sync()
 			acc_time += time.time() - st_time
 		st_time = time.time()
 		get_densities()
 		get_surface_normal()
 		get_local_mesh()
+		ti.sync()
 		acc_time += time.time() - st_time
 		constraints = densities.to_numpy()[:N[None]] / rest_density - 1.
 		distance_constriant = apply_distance_constraints(distance_eps)
