@@ -89,16 +89,6 @@ def get_unscaled_proximal(b: ti.template()) -> tm.vec3:
 	return tm.vec3(c_density, c_distance, c_surface)
 
 @ti.kernel
-def dot_prod(x: ti.template(), y: ti.template()) -> float:
-	'''
-	Returns the dot product of x and y.
-	'''
-	s = 0.
-	for i in range(N[None]):
-		s += tm.dot(x[i], y[i])
-	return s
-
-@ti.kernel
 def scale(a: ti.template(), c: float):
 	'''
 	Apply a *= c
