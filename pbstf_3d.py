@@ -378,6 +378,26 @@ def export_obj(p, local_mesh, save_file: str):
 		for i in range(local_mesh.shape[0]):
 			fd.write(f'f {local_mesh[i, 0] + 1} {local_mesh[i, 1] + 1} {local_mesh[i, 2] + 1}\n')
 
+@ti.kernel
+def distance_to_perfect_ball() -> float:
+	center = tm.vec3(0, 0, 0)
+	cnt = 0
+	for i in range(N[None]):
+		if on_surface[i]:
+			center += positions[i]
+			cnt += 1
+	center /= cnt
+	avg_dist = 0.
+	for i in range(N[None]):
+		if on_surface[i]:
+			avg_dist += tm.length(positions[i] - center)
+	avg_dist /= cnt
+	var_dist = 0.
+	for i in range(N[None]):
+		if on_surface[i]:
+			var_dist += (tm.length(positions[i] - center) - avg_dist) ** 2
+	var_dist /= cnt
+	return var_dist
 
 if __name__ == '__main__':
 	init_square_droplet(-3., 3., -3., 3., -3., 3., 30)
@@ -398,9 +418,10 @@ if __name__ == '__main__':
 	tri_cnt = get_visualization_data(vis_p, local_mesh)
 	export_obj(vis_p, local_mesh[:tri_cnt, :], f'{dir_name}/particles_0.obj')
 	print(f'Frame 0 written.')
-	max_iter = 50
+	max_iter = 10000
 	constraint_sos = np.zeros(max_iter + 1)
-	for frame in range(100):
+	dist2ball = np.zeros(max_iter + 1)
+	for frame in range(1):
 		advance()
 		init_neighbor_searcher()
 		
@@ -420,11 +441,12 @@ if __name__ == '__main__':
 			ti.sync()
 			acc_time += time.time() - st_time
 			constraint_sos[iter] = (constraints ** 2).sum() + distance_constriant + surface_constraint
+			dist2ball[iter] = distance_to_perfect_ball()
 			if iter % 100 == 0:
-				print(f'Iteration {iter}: {constraint_sos[iter]} = {(constraints ** 2).sum()} + {distance_constriant} + {surface_constraint}, time: {acc_time}')
+				print(f'Iteration {iter}: {constraint_sos[iter]} = {(constraints ** 2).sum()} + {distance_constriant} + {surface_constraint}, dist2ball: {dist2ball[iter]}, time: {acc_time}')
 				tot_time += acc_time
-				# tri_cnt = get_visualization_data(vis_p, local_mesh)
-				# export_obj(vis_p, local_mesh[:tri_cnt, :], f'{dir_name}/particles_iteration_{iter}.obj')
+				tri_cnt = get_visualization_data(vis_p, local_mesh)
+				export_obj(vis_p, local_mesh[:tri_cnt, :], f'{dir_name}/particles_iteration_{iter}.obj')
 				acc_time = 0.
 			st_time = time.time()
 			update_positions()
@@ -441,14 +463,11 @@ if __name__ == '__main__':
 		distance_constriant = apply_distance_constraints(distance_eps)
 		surface_constraint = apply_surface_constraints(surface_eps)
 		constraint_sos[max_iter] = (constraints ** 2).sum() + distance_constriant + surface_constraint
-		print(f'Iteration {max_iter}: {constraint_sos[max_iter]} = {(constraints ** 2).sum()} + {distance_constriant} + {surface_constraint}, time: {acc_time}')
+		dist2ball[max_iter] = distance_to_perfect_ball()
+		print(f'Iteration {max_iter}: {constraint_sos[max_iter]} = {(constraints ** 2).sum()} + {distance_constriant} + {surface_constraint}, dist2ball: {dist2ball[max_iter]}, time: {acc_time}')
 		tot_time += acc_time
 		
 		tri_cnt = get_visualization_data(vis_p, local_mesh)
 		export_obj(vis_p, local_mesh[:tri_cnt, :], f'{dir_name}/particles_{frame + 1}.obj')
-		plt.plot(np.linspace(0, max_iter, max_iter + 1), constraint_sos)
-		plt.xlabel('iteration')
-		plt.ylabel('constraint')
-		plt.savefig(f'{dir_name}/plot_{frame + 1}.png')
-		plt.clf()
+		np.savez(f'{dir_name}/convergence_data_{frame + 1}.npz', constraint_sos=constraint_sos, dist2ball=dist2ball, time=tot_time)
 		print(f'Frame {frame + 1} written. Total time: {tot_time}')
