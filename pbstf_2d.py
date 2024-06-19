@@ -347,7 +347,8 @@ if __name__ == '__main__':
 	get_densities()
 	mass[None] /= densities.to_numpy().max()
 	
-	os.makedirs('output', exist_ok=True)
+	dir_name = 'output-org'
+	os.makedirs(dir_name, exist_ok=True)
 	
 	get_densities()
 	get_surface_normal()
@@ -358,7 +359,7 @@ if __name__ == '__main__':
 	local_mesh = np.zeros((N[None], 2), dtype=np.int32)
 	get_np_positions(vis_p)
 	get_np_surface_data(normal_p, on_surf, local_mesh)
-	show_particles(vis_p, n=normal_p, on_surf=on_surf, local_mesh=local_mesh, save_file=f'output/particles_0.png')
+	show_particles(vis_p, n=normal_p, on_surf=on_surf, local_mesh=local_mesh, save_file=f'{dir_name}/particles_0.png')
 	print(f'Frame 0 written.')
 	max_iter = 10000
 	constraint_sos = np.zeros(max_iter + 1)
@@ -366,39 +367,49 @@ if __name__ == '__main__':
 		advance()
 		init_neighbor_searcher()
 		
-		st_time = time.time()
+		tot_time, acc_time = 0., 0.
 		for iter in range(max_iter):
+			st_time = time.time()
 			get_densities()
 			get_surface_normal()
 			get_local_mesh()
+			acc_time += time.time() - st_time
 			constraints = densities.to_numpy()[:N[None]] / rest_density - 1.
+			st_time = time.time()
 			apply_density_constraints(density_eps)
 			distance_constriant = apply_distance_constraints(distance_eps)
 			surface_constraint = apply_surface_constraints(surface_eps)
+			acc_time += time.time() - st_time
 			constraint_sos[iter] = (constraints ** 2).sum() + distance_constriant + surface_constraint
 			if iter % 1000 == 0:
-				print(f'Iteration {iter}: {constraint_sos[iter]}, time: {time.time() - st_time}')
+				print(f'Iteration {iter}: {constraint_sos[iter]}, time: {acc_time}')
+				tot_time += acc_time
 				get_np_positions(vis_p)
 				get_np_surface_data(normal_p, on_surf, local_mesh)
-				show_particles(vis_p, n=normal_p, on_surf=on_surf, local_mesh=local_mesh, save_file=f'output/particles_iteration_{iter}.png')
-				st_time = time.time()
+				show_particles(vis_p, n=normal_p, on_surf=on_surf, local_mesh=local_mesh, save_file=f'{dir_name}/particles_iteration_{iter}.png')
+				acc_time = 0.
+			st_time = time.time()
 			update_positions()
 			init_neighbor_searcher()
+			acc_time += time.time() - st_time
+		st_time = time.time()
 		get_densities()
 		get_surface_normal()
 		get_local_mesh()
+		acc_time += time.time() - st_time
 		constraints = densities.to_numpy()[:N[None]] / rest_density - 1.
 		distance_constriant = apply_distance_constraints(distance_eps)
 		surface_constraint = apply_surface_constraints(surface_eps)
 		constraint_sos[max_iter] = (constraints ** 2).sum() + distance_constriant + surface_constraint
-		print(f'Iteration {max_iter}: {constraint_sos[max_iter]}, time: {time.time() - st_time}')
+		print(f'Iteration {max_iter}: {constraint_sos[max_iter]}, time: {acc_time}')
+		tot_time += acc_time
 		
 		get_np_positions(vis_p)
 		get_np_surface_data(normal_p, on_surf, local_mesh)
-		show_particles(vis_p, n=normal_p, on_surf=on_surf, local_mesh=local_mesh, save_file=f'output/particles_{frame + 1}.png')
+		show_particles(vis_p, n=normal_p, on_surf=on_surf, local_mesh=local_mesh, save_file=f'{dir_name}/particles_{frame + 1}.png')
 		plt.plot(np.linspace(0, max_iter, max_iter + 1), constraint_sos)
 		plt.xlabel('iteration')
 		plt.ylabel('constraint')
-		plt.savefig(f'output/plot_{frame + 1}.png')
+		plt.savefig(f'{dir_name}/plot_{frame + 1}.png')
 		plt.clf()
-		print(f'Frame {frame + 1} written.')
+		print(f'Frame {frame + 1} written. Total time: {tot_time}')
