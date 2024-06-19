@@ -36,6 +36,7 @@ projected_positions = ti.field(dtype=tm.vec2, shape=(Nmax, N_neighbor))
 neighbors_id = ti.field(dtype=int, shape=(Nmax, N_neighbor))
 n_neighbors = ti.field(dtype=int, shape=Nmax)
 local_mesh_neighbors = ti.field(dtype=int, shape=(Nmax, N_neighbor))
+surface_gradient = ti.field(dtype=tm.vec3, shape=(Nmax, N_neighbor))
 delta_positions = ti.field(dtype=tm.vec3, shape=Nmax)
 
 grid_size = [int(np.ceil(np.sqrt(Nmax))), int(np.ceil(np.sqrt(Nmax))), int(np.ceil(np.sqrt(Nmax)))]
@@ -171,7 +172,7 @@ def get_surface_normal():
 						normals[i] += mass[None] / densities[i] * cubic_spline_derivative(pij_len, kernel_radius[None]) * pij / pij_len
 						block_radius = ti.min(particle_radius[None], pij_len * .5)
 						dangle = tm.asin(block_radius / pij_len)
-						theta = tm.acos(pij[1] / pij_len)
+						theta = tm.acos(tm.clamp(pij[1] / pij_len, -1., 1.))
 						phi = tm.atan2(pij[2], pij[0])
 						st_theta = tm.min(int(tm.max(theta - dangle, 0.) // unit_theta), Ntheta - 1)
 						en_theta = tm.min(int(tm.ceil(tm.min(theta + dangle, tm.pi) / unit_theta)), Ntheta)
@@ -295,7 +296,8 @@ def get_local_meshes():
 						projected_pij = pij - tm.dot(pij, ni) * ni
 						projected_positions[i, n_neighbors[i]] = tm.vec2(tm.dot(projected_pij, x_axis), tm.dot(projected_pij, y_axis))
 						n_neighbors[i] += 1
-		get_local_mesh(i, n_neighbors, projected_positions, local_mesh_neighbors)
+		if n_neighbors[i] >= 3:
+			get_local_mesh(i, n_neighbors, projected_positions, local_mesh_neighbors)
 		for j in range(n_neighbors[i]):
 			local_mesh_neighbors[i, j] = neighbors_id[i, local_mesh_neighbors[i, j]]
 
@@ -311,8 +313,9 @@ def triangle_area_gradient(a: int, b: int, c: int) -> tm.vec3:
 @ti.kernel
 def apply_surface_constraints(epsilon: float) -> float:
 	constraint_sum = 0.
+	surface_gradient.fill(0)
 	for i in range(N[None]):
-		if on_surface[i] == 0:
+		if on_surface[i] == 0 or n_neighbors[i] < 3:
 			continue
 		c = 0.
 		grad_i = tm.vec3(0, 0, 0)
@@ -323,17 +326,16 @@ def apply_surface_constraints(epsilon: float) -> float:
 			t2 = local_mesh_neighbors[i, j + 1] if j < n_neighbors[i] - 1 else local_mesh_neighbors[i, 0]
 			c += triangle_area(t0, t1, t2)
 			grad_i += triangle_area_gradient(t0, t1, t2)
-			denominator += tm.length(triangle_area_gradient(t1, t2, t0)) ** 2 + tm.length(triangle_area_gradient(t2, t0, t1)) ** 2
+			surface_gradient[i, j] += triangle_area_gradient(t1, t2, t0)
+			surface_gradient[i, j + 1 if j < n_neighbors[i] - 1 else 0] += triangle_area_gradient(t2, t0, t1)
 		constraint_sum += c
-		denominator += tm.length(grad_i)
+		denominator += tm.length(grad_i) ** 2
+		for j in range(n_neighbors[i]):
+			denominator += tm.length(surface_gradient[i, j]) ** 2
 		lmd = -c / denominator
 		delta_positions[i] += lmd * grad_i
 		for j in range(n_neighbors[i]):
-			t0 = i
-			t1 = local_mesh_neighbors[i, j]
-			t2 = local_mesh_neighbors[i, j + 1] if j < n_neighbors[i] - 1 else local_mesh_neighbors[i, 0]
-			delta_positions[t1] += lmd * triangle_area_gradient(t1, t2, t0)
-			delta_positions[t2] += lmd * triangle_area_gradient(t2, t0, t1)
+			delta_positions[local_mesh_neighbors[i, j]] += lmd * surface_gradient[i, j]
 	return constraint_sum
 
 @ti.kernel
@@ -385,7 +387,7 @@ if __name__ == '__main__':
 	get_densities()
 	mass[None] /= densities.to_numpy().max()
 	
-	dir_name = 'output_3d'
+	dir_name = 'output_3d-org'
 	os.makedirs(dir_name, exist_ok=True)
 	
 	get_densities()
@@ -396,9 +398,9 @@ if __name__ == '__main__':
 	tri_cnt = get_visualization_data(vis_p, local_mesh)
 	export_obj(vis_p, local_mesh[:tri_cnt, :], f'{dir_name}/particles_0.obj')
 	print(f'Frame 0 written.')
-	max_iter = 3000
+	max_iter = 50
 	constraint_sos = np.zeros(max_iter + 1)
-	for frame in range(1):
+	for frame in range(100):
 		advance()
 		init_neighbor_searcher()
 		
@@ -421,8 +423,8 @@ if __name__ == '__main__':
 			if iter % 100 == 0:
 				print(f'Iteration {iter}: {constraint_sos[iter]} = {(constraints ** 2).sum()} + {distance_constriant} + {surface_constraint}, time: {acc_time}')
 				tot_time += acc_time
-				tri_cnt = get_visualization_data(vis_p, local_mesh)
-				export_obj(vis_p, local_mesh[:tri_cnt, :], f'{dir_name}/particles_iteration_{iter}.obj')
+				# tri_cnt = get_visualization_data(vis_p, local_mesh)
+				# export_obj(vis_p, local_mesh[:tri_cnt, :], f'{dir_name}/particles_iteration_{iter}.obj')
 				acc_time = 0.
 			st_time = time.time()
 			update_positions()
