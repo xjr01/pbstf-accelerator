@@ -6,7 +6,7 @@ from matplotlib.collections import LineCollection
 import os
 import time
 
-ti.init(arch=ti.cuda, random_seed=42)
+ti.init(arch=ti.cuda, random_seed=42, short_circuit_operators=True)
 
 Nmax = 100000
 N_neighbor = 800
