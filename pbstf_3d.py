@@ -371,12 +371,13 @@ def get_visualization_data(np_positions: ti.types.ndarray(), local_mesh: ti.type
 				triangle_cnt += 1
 	return triangle_cnt
 
-def export_obj(p, local_mesh, save_file: str):
+def export_obj(p, local_mesh, save_file: str, particles_only=True):
 	with open(save_file, 'w') as fd:
 		for i in range(N[None]):
 			fd.write(f'v {p[i, 0]} {p[i, 1]} {p[i, 2]}\n')
-		for i in range(local_mesh.shape[0]):
-			fd.write(f'f {local_mesh[i, 0] + 1} {local_mesh[i, 1] + 1} {local_mesh[i, 2] + 1}\n')
+		if not particles_only:
+			for i in range(local_mesh.shape[0]):
+				fd.write(f'f {local_mesh[i, 0] + 1} {local_mesh[i, 1] + 1} {local_mesh[i, 2] + 1}\n')
 
 @ti.kernel
 def distance_to_perfect_ball() -> float:
