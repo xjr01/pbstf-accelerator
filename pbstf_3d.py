@@ -20,7 +20,7 @@ dt = 1. / 30.
 
 density_eps = 500.
 distance_eps = 40.
-surface_eps = 5.
+surface_eps = 1.
 
 Cmax = 500000
 Ntheta, Nphi = 18, 36
@@ -61,6 +61,42 @@ def init_square_droplet(sq_xmin: float, sq_xmax: float, sq_ymin: float, sq_ymax:
 			while x <= sq_xmax:
 				positions[N[None]] = tm.vec3(x, y, z)
 				velocities[N[None]] = tm.vec3(0, 0, 0)
+				N[None] += 1
+				x += spacing
+			z += spacing
+		y += spacing
+
+@ti.kernel
+def init_droplets_colliding(x_resolution: int):
+	N[None] = 0
+	spacing = 2. / x_resolution
+	particle_radius[None] = .5 * spacing
+	kernel_radius[None] = 3. * spacing
+	sq_xmin, sq_xmax = -1.5, -.5
+	sq_ymin, sq_ymax = -.625, .375
+	sq_zmin, sq_zmax = -.5, .5
+	y = sq_ymin
+	while y <= sq_ymax:
+		z = sq_zmin
+		while z <= sq_zmax:
+			x = sq_xmin
+			while x <= sq_xmax:
+				positions[N[None]] = tm.vec3(x, y, z)
+				velocities[N[None]] = tm.vec3(1, 0, 0)
+				N[None] += 1
+				x += spacing
+			z += spacing
+		y += spacing
+	sq_xmin, sq_xmax = .5, 1.5
+	sq_ymin, sq_ymax = -.375, .625
+	y = sq_ymin
+	while y <= sq_ymax:
+		z = sq_zmin
+		while z <= sq_zmax:
+			x = sq_xmin
+			while x <= sq_xmax:
+				positions[N[None]] = tm.vec3(x, y, z)
+				velocities[N[None]] = tm.vec3(-1, 0, 0)
 				N[None] += 1
 				x += spacing
 			z += spacing
@@ -401,7 +437,7 @@ def distance_to_perfect_ball() -> float:
 	return var_dist
 
 if __name__ == '__main__':
-	init_square_droplet(-3., 3., -3., 3., -3., 3., 30)
+	init_square_droplet(-1., 1., -1., 1., -1., 1., 20)
 	print('particle number:', N[None])
 	init_neighbor_searcher()
 	mass[None] = 1.
@@ -419,7 +455,7 @@ if __name__ == '__main__':
 	tri_cnt = get_visualization_data(vis_p, local_mesh)
 	export_obj(vis_p, local_mesh[:tri_cnt, :], f'{dir_name}/particles_0.obj')
 	print(f'Frame 0 written.')
-	max_iter = 10000
+	max_iter = 3000
 	constraint_sos = np.zeros(max_iter + 1)
 	dist2ball = np.zeros(max_iter + 1)
 	for frame in range(1):
