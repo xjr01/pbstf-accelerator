@@ -11,9 +11,10 @@ from pbstf_3d import *
 
 ############## Solver ##############
 
-density_weight = .4
-distance_weight = 1.
-surface_weight = .5
+density_weight = .2
+distance_weight = .4
+surface_weight = .13
+inv_beta = 1.
 
 density_sos = ti.field(dtype=float, shape=Nmax)
 distance_sos = ti.field(dtype=float, shape=Nmax)
@@ -100,12 +101,24 @@ def scale(a: ti.template(), c: float):
 
 def proximal_solve():
 	constraint_packed = get_unscaled_proximal(delta_positions)
-	scale(delta_positions, dt * dt / mass[None])
+	scale(delta_positions, inv_beta)
 	return constraint_packed[0], constraint_packed[1], constraint_packed[2]
+
+@ti.kernel
+def max_len(a: ti.template()) -> float:
+	res = 0.
+	for i in range(N[None]):
+		ti.atomic_max(res, tm.length(a[i]))
+	return res
+
+def get_beta():
+	get_unscaled_proximal(delta_positions)
+	return 2. * particle_radius[None] / max_len(delta_positions)
 
 
 if __name__ == '__main__':
-	init_square_droplet(-3., 3., -3., 3., -3., 3., 30)
+	# init_square_droplet(-1., 1., -1., 1., -1., 1., 20)
+	init_droplets_colliding(30)
 	print('particle number:', N[None])
 	init_neighbor_searcher()
 	mass[None] = 1.
@@ -118,15 +131,16 @@ if __name__ == '__main__':
 	get_densities()
 	get_surface_normal()
 	get_local_meshes()
+	inv_beta = get_beta()
 	vis_p = np.zeros((N[None], 3))
 	local_mesh = np.zeros((N[None] * N_neighbor, 3), dtype=np.int32)
 	tri_cnt = get_visualization_data(vis_p, local_mesh)
 	export_obj(vis_p, local_mesh[:tri_cnt, :], f'{dir_name}/particles_0.obj')
 	print(f'Frame 0 written.')
-	max_iter = 4500
+	max_iter = 20
 	constraint_sos = np.zeros(max_iter + 1)
 	dist2ball = np.zeros(max_iter + 1)
-	for frame in range(1):
+	for frame in range(200):
 		advance()
 		init_neighbor_searcher()
 		
@@ -144,8 +158,8 @@ if __name__ == '__main__':
 			if iter % 100 == 0:
 				print(f'Iteration {iter}: {constraint_sos[iter]} = {density_constraint} + {distance_constriant} + {surface_constraint}, dist2ball: {dist2ball[iter]}, time: {acc_time}')
 				tot_time += acc_time
-				tri_cnt = get_visualization_data(vis_p, local_mesh)
-				export_obj(vis_p, local_mesh[:tri_cnt, :], f'{dir_name}/particles_iteration_{iter}.obj')
+				# tri_cnt = get_visualization_data(vis_p, local_mesh)
+				# export_obj(vis_p, local_mesh[:tri_cnt, :], f'{dir_name}/particles_iteration_{iter}.obj')
 				acc_time = 0.
 			st_time = time.time()
 			update_positions()
@@ -160,6 +174,7 @@ if __name__ == '__main__':
 		acc_time += time.time() - st_time
 		density_constraint, distance_constriant, surface_constraint = proximal_solve()
 		constraint_sos[max_iter] = density_constraint + distance_constriant + surface_constraint
+		dist2ball[max_iter] = distance_to_perfect_ball()
 		print(f'Iteration {max_iter}: {constraint_sos[max_iter]} = {density_constraint} + {distance_constriant} + {surface_constraint}, dist2ball: {dist2ball[max_iter]}, time: {acc_time}')
 		tot_time += acc_time
 		
