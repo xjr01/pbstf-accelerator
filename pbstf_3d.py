@@ -11,14 +11,14 @@ from delaunator_2d import cmd_args, Nmax, N_neighbor, get_local_mesh
 N = ti.field(dtype=int, shape=())
 mass = ti.field(dtype=float, shape=())
 rest_density = 1.	# g/cm^3
-x_min, x_max = -5., 5.
-y_min, y_max = -5., 5.
-z_min, z_max = -5., 5.
+x_min, x_max = -2., 2.
+y_min, y_max = -2., 2.
+z_min, z_max = -2., 2.
 particle_radius = ti.field(dtype=float, shape=())
 kernel_radius = ti.field(dtype=float, shape=())
 dt = 1. / 30.
 
-density_eps = 500.
+density_eps = 600.
 distance_eps = 40.
 surface_eps = 1.
 
@@ -440,7 +440,7 @@ if __name__ == '__main__':
 	if cmd_args.case == 0:
 		init_square_droplet(-1., 1., -1., 1., -1., 1., 20)
 	elif cmd_args.case == 1:
-		init_droplets_colliding(35)
+		init_droplets_colliding(33)
 	else:
 		raise NotImplementedError
 	print('particle number:', N[None])

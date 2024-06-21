@@ -120,7 +120,7 @@ if __name__ == '__main__':
 	if cmd_args.case == 0:
 		init_square_droplet(-1., 1., -1., 1., -1., 1., 20)
 	elif cmd_args.case == 1:
-		init_droplets_colliding(35)
+		init_droplets_colliding(33)
 	else:
 		raise NotImplementedError
 	print('particle number:', N[None])
