@@ -6,7 +6,7 @@ from matplotlib.collections import LineCollection
 import os
 import time
 
-from delaunator_2d import Nmax, N_neighbor, get_local_mesh
+from delaunator_2d import cmd_args, Nmax, N_neighbor, get_local_mesh
 
 N = ti.field(dtype=int, shape=())
 mass = ti.field(dtype=float, shape=())
@@ -437,14 +437,19 @@ def distance_to_perfect_ball() -> float:
 	return var_dist
 
 if __name__ == '__main__':
-	init_square_droplet(-1., 1., -1., 1., -1., 1., 20)
+	if cmd_args.case == 0:
+		init_square_droplet(-1., 1., -1., 1., -1., 1., 20)
+	elif cmd_args.case == 1:
+		init_droplets_colliding(35)
+	else:
+		raise NotImplementedError
 	print('particle number:', N[None])
 	init_neighbor_searcher()
 	mass[None] = 1.
 	get_densities()
 	mass[None] /= densities.to_numpy().max()
 	
-	dir_name = 'output_3d-org'
+	dir_name = cmd_args.dir
 	os.makedirs(dir_name, exist_ok=True)
 	
 	get_densities()
@@ -453,12 +458,13 @@ if __name__ == '__main__':
 	vis_p = np.zeros((N[None], 3))
 	local_mesh = np.zeros((N[None] * N_neighbor, 3), dtype=np.int32)
 	tri_cnt = get_visualization_data(vis_p, local_mesh)
-	export_obj(vis_p, local_mesh[:tri_cnt, :], f'{dir_name}/particles_0.obj')
-	print(f'Frame 0 written.')
-	max_iter = 3000
+	if cmd_args.frame > 1:
+		export_obj(vis_p, local_mesh[:tri_cnt, :], os.path.join(dir_name, 'particles_0.obj'))
+		print(f'Frame 0 written.')
+	max_iter = cmd_args.iter
 	constraint_sos = np.zeros(max_iter + 1)
 	dist2ball = np.zeros(max_iter + 1)
-	for frame in range(1):
+	for frame in range(cmd_args.frame):
 		advance()
 		init_neighbor_searcher()
 		
@@ -482,8 +488,9 @@ if __name__ == '__main__':
 			if iter % 100 == 0:
 				print(f'Iteration {iter}: {constraint_sos[iter]} = {(constraints ** 2).sum()} + {distance_constriant} + {surface_constraint}, dist2ball: {dist2ball[iter]}, time: {acc_time}')
 				tot_time += acc_time
-				tri_cnt = get_visualization_data(vis_p, local_mesh)
-				export_obj(vis_p, local_mesh[:tri_cnt, :], f'{dir_name}/particles_iteration_{iter}.obj')
+				if cmd_args.frame == 1:
+					tri_cnt = get_visualization_data(vis_p, local_mesh)
+					export_obj(vis_p, local_mesh[:tri_cnt, :], os.path.join(dir_name, f'particles_iteration_{iter}.obj'))
 				acc_time = 0.
 			st_time = time.time()
 			update_positions()
@@ -505,6 +512,6 @@ if __name__ == '__main__':
 		tot_time += acc_time
 		
 		tri_cnt = get_visualization_data(vis_p, local_mesh)
-		export_obj(vis_p, local_mesh[:tri_cnt, :], f'{dir_name}/particles_{frame + 1}.obj')
-		np.savez(f'{dir_name}/convergence_data_{frame + 1}.npz', constraint_sos=constraint_sos, dist2ball=dist2ball, time=tot_time)
+		export_obj(vis_p, local_mesh[:tri_cnt, :], os.path.join(dir_name, f'particles_{frame + 1}.obj' if cmd_args.frame > 1 else f'particles_iteration_{max_iter}.obj'))
+		np.savez(os.path.join(dir_name, f'convergence_data_{frame + 1}.npz'), constraint_sos=constraint_sos, dist2ball=dist2ball, time=tot_time)
 		print(f'Frame {frame + 1} written. Total time: {tot_time}')

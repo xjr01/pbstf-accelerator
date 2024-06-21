@@ -1,12 +1,18 @@
 import taichi as ti
 import taichi.math as tm
-import numpy as np
-import matplotlib.pyplot as plt
-from matplotlib.collections import LineCollection
-import os
-import time
+import argparse
 
-ti.init(arch=ti.cuda, random_seed=42, short_circuit_operators=True)
+def parse_args():
+	parser = argparse.ArgumentParser()
+	parser.add_argument('--device', type=str, default='gpu')
+	parser.add_argument('--case', type=int, default=0)
+	parser.add_argument('--dir', type=str, default='output')
+	parser.add_argument('--frame', type=int, default=100)
+	parser.add_argument('--iter', type=int, default=40)
+	return parser.parse_args()
+cmd_args = parse_args()
+
+ti.init(arch=ti.cuda if cmd_args.device == 'gpu' else ti.cpu, short_circuit_operators=True)
 
 Nmax = 100000
 N_neighbor = 800
