@@ -1,8 +1,6 @@
 import taichi as ti
 import taichi.math as tm
 import numpy as np
-import matplotlib.pyplot as plt
-from matplotlib.collections import LineCollection
 import os
 import time
 
