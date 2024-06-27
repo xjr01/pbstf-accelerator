@@ -341,7 +341,8 @@ def triangle_area(a: int, b: int, c: int) -> float:
 
 @ti.func
 def triangle_area_gradient(a: int, b: int, c: int) -> tm.vec3:
-	normal = tm.normalize(tm.cross(positions[b] - positions[a], positions[c] - positions[a]))
+	normal = tm.cross(positions[b] - positions[a], positions[c] - positions[a])
+	normal = tm.normalize(normal) if tm.length(normal) >= 1e-9 else 0.
 	return .5 * tm.cross(normal, positions[c] - positions[b])
 
 @ti.kernel
