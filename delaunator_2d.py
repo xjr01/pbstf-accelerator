@@ -14,7 +14,7 @@ cmd_args = parse_args()
 
 ti.init(arch=ti.cuda if cmd_args.device == 'gpu' else ti.cpu, short_circuit_operators=True)
 
-Nmax = 100000
+Nmax = 200000
 N_neighbor = 800
 
 chain_pre = ti.field(dtype=int, shape=(Nmax, N_neighbor))

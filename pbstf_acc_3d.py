@@ -99,6 +99,8 @@ def scale(a: ti.template(), c: float):
 
 def proximal_solve():
 	constraint_packed = get_unscaled_proximal(delta_positions)
+	global inv_beta
+	inv_beta = min(inv_beta, get_beta(calc_delta_positions=False))
 	scale(delta_positions, inv_beta)
 	return constraint_packed[0], constraint_packed[1], constraint_packed[2]
 
@@ -109,8 +111,9 @@ def max_len(a: ti.template()) -> float:
 		ti.atomic_max(res, tm.length(a[i]))
 	return res
 
-def get_beta():
-	get_unscaled_proximal(delta_positions)
+def get_beta(calc_delta_positions=True):
+	if calc_delta_positions:
+		get_unscaled_proximal(delta_positions)
 	return 2. * particle_radius[None] / max_len(delta_positions)
 
 
@@ -119,6 +122,9 @@ if __name__ == '__main__':
 		init_square_droplet(-1., 1., -1., 1., -1., 1., 20)
 	elif cmd_args.case == 1:
 		init_droplets_colliding(33)
+	elif cmd_args.case == 2:
+		init_droplet_bouncing(0., 0., 0., 1., 35)
+		initcollider_droplet_bouncing()
 	else:
 		raise NotImplementedError
 	print('particle number:', N[None])
@@ -167,6 +173,7 @@ if __name__ == '__main__':
 				acc_time = 0.
 			st_time = time.time()
 			update_positions()
+			colliders_project(N, positions, velocities, frame * dt, dt)
 			init_neighbor_searcher()
 			ti.sync()
 			acc_time += time.time() - st_time
@@ -179,7 +186,7 @@ if __name__ == '__main__':
 		density_constraint, distance_constriant, surface_constraint = proximal_solve()
 		constraint_sos[max_iter] = density_constraint + distance_constriant + surface_constraint
 		dist2ball[max_iter] = distance_to_perfect_ball()
-		print(f'Iteration {max_iter}: {constraint_sos[max_iter]} = {density_constraint} + {distance_constriant} + {surface_constraint}, dist2ball: {dist2ball[max_iter]}, time: {acc_time}')
+		print(f'Iteration {max_iter}: {constraint_sos[max_iter]} = {density_constraint} + {distance_constriant} + {surface_constraint}, dist2ball: {dist2ball[max_iter]}, time: {acc_time} [{inv_beta}]')
 		tot_time += acc_time
 		
 		tri_cnt = get_visualization_data(vis_p, local_mesh)

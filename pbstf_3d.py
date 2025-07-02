@@ -5,9 +5,11 @@ import os
 import time
 
 from delaunator_2d import cmd_args, Nmax, N_neighbor, get_local_mesh
+from collider_3d import BoundaryCollider, colliders, colliders_project
 
 N = ti.field(dtype=int, shape=())
 mass = ti.field(dtype=float, shape=())
+gravity = ti.field(dtype=float, shape=())
 rest_density = 1.	# g/cm^3
 x_min, x_max = -2., 2.
 y_min, y_max = -2., 2.
@@ -63,6 +65,7 @@ def init_square_droplet(sq_xmin: float, sq_xmax: float, sq_ymin: float, sq_ymax:
 				x += spacing
 			z += spacing
 		y += spacing
+	gravity[None] = 0.
 
 @ti.kernel
 def init_droplets_colliding(x_resolution: int):
@@ -99,6 +102,36 @@ def init_droplets_colliding(x_resolution: int):
 				x += spacing
 			z += spacing
 		y += spacing
+	gravity[None] = 0.
+
+@ti.kernel
+def init_droplet_bouncing(x_center: float, y_center: float, z_center: float, radius: float, x_resolution: int):
+	N[None] = 0
+	sq_xmin, sq_xmax = x_center - radius, x_center + radius
+	sq_ymin, sq_ymax = y_center - radius, y_center + radius
+	sq_zmin, sq_zmax = z_center - radius, z_center + radius
+	spacing = (sq_xmax - sq_xmin) / x_resolution
+	particle_radius[None] = .5 * spacing
+	kernel_radius[None] = 3. * spacing
+	y = sq_ymin
+	while y <= sq_ymax:
+		z = sq_zmin
+		while z <= sq_zmax:
+			x = sq_xmin
+			while x <= sq_xmax:
+				if (x - x_center) ** 2 + (y - y_center) ** 2 + (z - z_center) ** 2 > radius ** 2:
+					x += spacing
+					continue
+				positions[N[None]] = tm.vec3(x, y, z)
+				velocities[N[None]] = tm.vec3(0, -1.5, 0)
+				N[None] += 1
+				x += spacing
+			z += spacing
+		y += spacing
+	gravity[None] = 0.
+
+def initcollider_droplet_bouncing():
+	colliders.append(BoundaryCollider(x_min, x_max, y_min, y_max, z_min, z_max))
 
 @ti.kernel
 def init_neighbor_searcher():
@@ -382,6 +415,7 @@ def update_positions():
 @ti.kernel
 def advance():
 	for i in range(N[None]):
+		velocities[i] += gravity[None] * dt
 		positions[i] += velocities[i] * dt
 
 
@@ -439,6 +473,9 @@ if __name__ == '__main__':
 		init_square_droplet(-1., 1., -1., 1., -1., 1., 20)
 	elif cmd_args.case == 1:
 		init_droplets_colliding(33)
+	elif cmd_args.case == 2:
+		init_droplet_bouncing(0., 0., 0., 1., 35)
+		initcollider_droplet_bouncing()
 	else:
 		raise NotImplementedError
 	print('particle number:', N[None])
@@ -492,6 +529,7 @@ if __name__ == '__main__':
 				acc_time = 0.
 			st_time = time.time()
 			update_positions()
+			colliders_project(N, positions, velocities, frame * dt, dt)
 			init_neighbor_searcher()
 			ti.sync()
 			acc_time += time.time() - st_time
