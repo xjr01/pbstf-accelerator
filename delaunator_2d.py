@@ -9,6 +9,10 @@ def parse_args():
 	parser.add_argument('--dir', type=str, default='output')
 	parser.add_argument('--frame', type=int, default=100)
 	parser.add_argument('--iter', type=int, default=40)
+	parser.add_argument('--dt', type=float, default=1. / 30.)
+	parser.add_argument('--range', type=str, default='-2,2,-2,2,-2,2')
+	parser.add_argument('--kernel_scale', type=float, default=6.)
+	parser.add_argument('--file_type', type=str, default='obj')
 	return parser.parse_args()
 cmd_args = parse_args()
 

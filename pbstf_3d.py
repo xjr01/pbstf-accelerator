@@ -11,12 +11,10 @@ N = ti.field(dtype=int, shape=())
 mass = ti.field(dtype=float, shape=())
 gravity = ti.field(dtype=float, shape=())
 rest_density = 1.	# g/cm^3
-x_min, x_max = -2., 2.
-y_min, y_max = -2., 2.
-z_min, z_max = -2., 2.
+x_min, x_max, y_min, y_max, z_min, z_max = map(float, cmd_args.range.split(','))
 particle_radius = ti.field(dtype=float, shape=())
 kernel_radius = ti.field(dtype=float, shape=())
-dt = 1. / 30.
+dt = cmd_args.dt
 
 density_eps = 600.
 distance_eps = 40.
@@ -52,7 +50,7 @@ def init_square_droplet(sq_xmin: float, sq_xmax: float, sq_ymin: float, sq_ymax:
 	N[None] = 0
 	spacing = (sq_xmax - sq_xmin) / x_resolution
 	particle_radius[None] = .5 * spacing
-	kernel_radius[None] = 3. * spacing
+	kernel_radius[None] = cmd_args.kernel_scale * particle_radius[None]
 	y = sq_ymin
 	while y <= sq_ymax:
 		z = sq_zmin
@@ -72,7 +70,7 @@ def init_droplets_colliding(x_resolution: int):
 	N[None] = 0
 	spacing = 2. / x_resolution
 	particle_radius[None] = .5 * spacing
-	kernel_radius[None] = 3. * spacing
+	kernel_radius[None] = cmd_args.kernel_scale * particle_radius[None]
 	sq_xmin, sq_xmax = -1.5, -.5
 	sq_ymin, sq_ymax = -.625, .375
 	sq_zmin, sq_zmax = -.5, .5
@@ -112,7 +110,7 @@ def init_droplet_bouncing(x_center: float, y_center: float, z_center: float, rad
 	sq_zmin, sq_zmax = z_center - radius, z_center + radius
 	spacing = (sq_xmax - sq_xmin) / x_resolution
 	particle_radius[None] = .5 * spacing
-	kernel_radius[None] = 3. * spacing
+	kernel_radius[None] = cmd_args.kernel_scale * particle_radius[None]
 	y = sq_ymin
 	while y <= sq_ymax:
 		z = sq_zmin
@@ -447,6 +445,15 @@ def export_obj(p, local_mesh, save_file: str, particles_only=True):
 			for i in range(local_mesh.shape[0]):
 				fd.write(f'f {local_mesh[i, 0] + 1} {local_mesh[i, 1] + 1} {local_mesh[i, 2] + 1}\n')
 
+def export_json_particles(p, save_file: str):
+	with open(save_file, 'w') as fd:
+		fd.write('[\n')
+		for i in range(N[None] - 1):
+			fd.write(f'\t[{p[i, 0]}, {p[i, 1]}, {p[i, 2]}],\n')
+		if N[None] >= 1:
+			fd.write(f'\t[{p[N[None] - 1, 0]}, {p[N[None] - 1, 1]}, {p[N[None] - 1, 2]}]\n')
+		fd.write(']')
+
 @ti.kernel
 def distance_to_perfect_ball() -> float:
 	center = tm.vec3(0, 0, 0)
@@ -478,7 +485,7 @@ if __name__ == '__main__':
 		initcollider_droplet_bouncing()
 	else:
 		raise NotImplementedError
-	print('particle number:', N[None])
+	print(f'particle number: {N[None]}, particle radius: {particle_radius[None]}')
 	init_neighbor_searcher()
 	mass[None] = 1.
 	get_densities()
@@ -494,7 +501,10 @@ if __name__ == '__main__':
 	local_mesh = np.zeros((N[None] * N_neighbor, 3), dtype=np.int32)
 	tri_cnt = get_visualization_data(vis_p, local_mesh)
 	if cmd_args.frame > 1:
-		export_obj(vis_p, local_mesh[:tri_cnt, :], os.path.join(dir_name, 'particles_0.obj'))
+		if cmd_args.file_type == 'obj':
+			export_obj(vis_p, local_mesh[:tri_cnt, :], os.path.join(dir_name, 'particles_0.obj'))
+		elif cmd_args.file_type == 'json':
+			export_json_particles(vis_p, os.path.join(dir_name, 'particles_0.json'))
 		print(f'Frame 0 written.')
 	max_iter = cmd_args.iter
 	constraint_sos = np.zeros(max_iter + 1)
@@ -525,7 +535,10 @@ if __name__ == '__main__':
 				tot_time += acc_time
 				if cmd_args.frame == 1:
 					tri_cnt = get_visualization_data(vis_p, local_mesh)
-					export_obj(vis_p, local_mesh[:tri_cnt, :], os.path.join(dir_name, f'particles_iteration_{iter}.obj'))
+					if cmd_args.file_type == 'obj':
+						export_obj(vis_p, local_mesh[:tri_cnt, :], os.path.join(dir_name, f'particles_iteration_{iter}.obj'))
+					elif cmd_args.file_type == 'json':
+						export_json_particles(vis_p, os.path.join(dir_name, f'particles_iteration_{iter}.json'))
 				acc_time = 0.
 			st_time = time.time()
 			update_positions()
@@ -548,6 +561,9 @@ if __name__ == '__main__':
 		tot_time += acc_time
 		
 		tri_cnt = get_visualization_data(vis_p, local_mesh)
-		export_obj(vis_p, local_mesh[:tri_cnt, :], os.path.join(dir_name, f'particles_{frame + 1}.obj' if cmd_args.frame > 1 else f'particles_iteration_{max_iter}.obj'))
+		if cmd_args.file_type == 'obj':
+			export_obj(vis_p, local_mesh[:tri_cnt, :], os.path.join(dir_name, f'particles_{frame + 1}.obj' if cmd_args.frame > 1 else f'particles_iteration_{max_iter}.obj'))
+		elif cmd_args.file_type == 'json':
+			export_json_particles(vis_p, os.path.join(dir_name, f'particles_{frame + 1}.json' if cmd_args.frame > 1 else f'particles_iteration_{max_iter}.json'))
 		np.savez(os.path.join(dir_name, f'convergence_data_{frame + 1}.npz'), constraint_sos=constraint_sos, dist2ball=dist2ball, time=tot_time)
 		print(f'Frame {frame + 1} written. Total time: {tot_time}')

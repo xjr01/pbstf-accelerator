@@ -127,7 +127,7 @@ if __name__ == '__main__':
 		initcollider_droplet_bouncing()
 	else:
 		raise NotImplementedError
-	print('particle number:', N[None])
+	print(f'particle number: {N[None]}, particle radius: {particle_radius[None]}')
 	init_neighbor_searcher()
 	mass[None] = 1.
 	get_densities()
@@ -144,7 +144,10 @@ if __name__ == '__main__':
 	local_mesh = np.zeros((N[None] * N_neighbor, 3), dtype=np.int32)
 	tri_cnt = get_visualization_data(vis_p, local_mesh)
 	if cmd_args.frame > 1:
-		export_obj(vis_p, local_mesh[:tri_cnt, :], os.path.join(dir_name, 'particles_0.obj'))
+		if cmd_args.file_type == 'obj':
+			export_obj(vis_p, local_mesh[:tri_cnt, :], os.path.join(dir_name, 'particles_0.obj'))
+		elif cmd_args.file_type == 'json':
+			export_json_particles(vis_p, os.path.join(dir_name, 'particles_0.json'))
 		print(f'Frame 0 written.')
 	max_iter = cmd_args.iter
 	constraint_sos = np.zeros(max_iter + 1)
@@ -169,7 +172,10 @@ if __name__ == '__main__':
 				tot_time += acc_time
 				if cmd_args.frame == 1:
 					tri_cnt = get_visualization_data(vis_p, local_mesh)
-					export_obj(vis_p, local_mesh[:tri_cnt, :], os.path.join(dir_name, f'particles_iteration_{iter}.obj'))
+					if cmd_args.file_type == 'obj':
+						export_obj(vis_p, local_mesh[:tri_cnt, :], os.path.join(dir_name, f'particles_iteration_{iter}.obj'))
+					elif cmd_args.file_type == 'json':
+						export_json_particles(vis_p, os.path.join(dir_name, f'particles_iteration_{iter}.json'))
 				acc_time = 0.
 			st_time = time.time()
 			update_positions()
@@ -190,6 +196,9 @@ if __name__ == '__main__':
 		tot_time += acc_time
 		
 		tri_cnt = get_visualization_data(vis_p, local_mesh)
-		export_obj(vis_p, local_mesh[:tri_cnt, :], os.path.join(dir_name, f'particles_{frame + 1}.obj' if cmd_args.frame > 1 else f'particles_iteration_{max_iter}.obj'))
+		if cmd_args.file_type == 'obj':
+			export_obj(vis_p, local_mesh[:tri_cnt, :], os.path.join(dir_name, f'particles_{frame + 1}.obj' if cmd_args.frame > 1 else f'particles_iteration_{max_iter}.obj'))
+		elif cmd_args.file_type == 'json':
+			export_json_particles(vis_p, os.path.join(dir_name, f'particles_{frame + 1}.json' if cmd_args.frame > 1 else f'particles_iteration_{max_iter}.json'))
 		np.savez(os.path.join(dir_name, f'convergence_data_{frame + 1}.npz'), constraint_sos=constraint_sos, dist2ball=dist2ball, time=tot_time)
 		print(f'Frame {frame + 1} written. Total time: {tot_time}')
